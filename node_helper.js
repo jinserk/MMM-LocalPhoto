@@ -20,6 +20,9 @@ const VIDEO_EXTS = new Set(["mp4", "webm", "ogg", "ogv", "mov", "m4v", "mkv"]);
 const IMAGE_EXTS = new Set(["jpg", "jpeg", "png", "gif", "webp", "avif", "bmp", "svg"]);
 const MEDIA_ROUTE = "/MMM-LocalPhoto/media";
 const DEFAULTS = { mediaDir: "media", rescanIntervalSeconds: 300 };
+// A file is listed only once it hasn't changed for this long, so a file that
+// is still being copied (plain `cp`) is not shown half-written.
+const SETTLE_MS = 3000;
 
 module.exports = NodeHelper.create({
 	start () {
@@ -53,6 +56,7 @@ module.exports = NodeHelper.create({
 	stop () {
 		clearInterval(this.rescanTimer);
 		clearTimeout(this.debounceTimer);
+		clearTimeout(this.recheckTimer);
 		for (const w of this.watchers) w.close();
 		this.watchers = [];
 	},
@@ -128,10 +132,16 @@ module.exports = NodeHelper.create({
 				try {
 					const st = await fsp.stat(full);
 					if (!st.isFile() || st.size === 0) continue;
+					if (Date.now() - st.mtimeMs < SETTLE_MS) {
+						// still being written: look again once it has settled
+						this.recheckSoon();
+						continue;
+					}
 					out.push({
 						key,
 						type,
-						url: `${MEDIA_ROUTE}/${key.split("/").map(encodeURIComponent).join("/")}`,
+						// ?v= changes when the file is replaced, so browsers don't show a cached old copy
+						url: `${MEDIA_ROUTE}/${key.split("/").map(encodeURIComponent).join("/")}?v=${Math.floor(st.mtimeMs).toString(36)}-${st.size.toString(36)}`,
 						lastModified: st.mtime.toISOString(),
 						size: st.size
 					});
@@ -141,6 +151,15 @@ module.exports = NodeHelper.create({
 			}
 		}
 		return out;
+	},
+
+	/** Rescan after a file that was still being written has settled. */
+	recheckSoon () {
+		if (this.recheckTimer) return;
+		this.recheckTimer = setTimeout(() => {
+			this.recheckTimer = null;
+			this.refresh("file settled");
+		}, SETTLE_MS + 500);
 	},
 
 	/** Watch for changes; a short debounce batches bulk copies. */

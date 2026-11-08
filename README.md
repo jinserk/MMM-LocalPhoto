@@ -62,7 +62,20 @@ Put your files in `MMM-LocalPhoto/media/`, or point `mediaDir` at any folder.
 
 - **Photos:** use JPEG or WebP. **HEIC is not supported by browsers** (export iPhone photos as JPEG). Large photos (e.g. 4000×3000) work, but resizing to about the screen size saves memory on small devices like a Raspberry Pi.
 - **Videos:** use **H.264 MP4** (or VP9 WebM). HEVC/H.265 `.mov` from phones usually won't play in Chromium. Keep the resolution near the screen's: 1080p on a Pi Zero 2 W can stutter.
-- Files and folders starting with `.` are ignored, so copy to `.name.tmp` and rename when done to avoid half-copied files showing up.
+## Adding, replacing and deleting files while it runs
+
+You can change the folder at any time; the slideshow keeps playing.
+
+- **Add:** new files appear within a few seconds. A file is listed only after it has stopped changing for 3 s, so a large file being copied with plain `cp` isn't shown half-written.
+- **Replace** (same name, new content): picked up the same way. Media URLs carry a version (`?v=` from modification time and size), so browsers fetch the new file instead of a cached copy.
+- **Delete:** removed from the list. If the deleted item is on screen, the slideshow moves on.
+- Files and folders starting with `.` are ignored. Copying to `.name.tmp` and renaming when done (as `rsync` does) is the safest way.
+
+## How media reaches the browser
+
+- **Photos** are downloaded whole, then shown.
+- **Videos** are streamed: the browser fetches the start (`preload: "metadata"`) and then the rest in chunks while playing, using HTTP range requests. A long video never has to be fully downloaded first.
+- Files are cached by the browser for up to 1 hour. A replaced file gets a new URL, so the cache never shows an old version.
 
 ## Security
 
