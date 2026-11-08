@@ -43,6 +43,7 @@ Put your files in `MMM-LocalPhoto/media/`, or point `mediaDir` at any folder.
 | Option | Default | Description |
 |---|---|---|
 | `mediaDir` | `"media"` | Folder to scan (recursively). Relative paths are relative to the module folder. Read on the server only. |
+| `mode` | `"all"` | What to show: `"all"` (photos and videos), `"photosOnly"` or `"videosOnly"`. |
 | `rescanIntervalSeconds` | `300` | Fallback full rescan; `0` disables it. Changes are normally picked up within ~2 s via file watching. |
 | `displayDurationSeconds` | `30` | How long each photo is shown. |
 | `transitionDurationSeconds` | `2` | Fade-in duration. |
@@ -50,11 +51,9 @@ Put your files in `MMM-LocalPhoto/media/`, or point `mediaDir` at any folder.
 | `applyBlur` | `false` | Blurred, dimmed copy of the photo behind it, filling empty space. |
 | `absoluteOptions` | see source | `{ enabled, side: "horizontal"\|"vertical", size, blurContainer: { width, height } }` for `absolute`. |
 | `displayOrder` | `"random_dedupe"` | `random_dedupe`, `random`, `newest_first`, `oldest_first` (by file modification time). |
-| `video.enabled` | `true` | Include videos. |
 | `video.muted` | `true` | Browsers only autoplay muted videos. |
 | `video.loop` | `false` | Loop a video until `displayDurationSeconds` or the cap is reached, whichever is longer. |
 | `video.maxDurationSeconds` | `300` | Longest time one video plays before moving on. |
-| `video.videosOnly` | `false` | Show only videos. |
 | `video.autoplay`, `video.controls`, `video.preload` | `true`, `false`, `"metadata"` | Passed to the `<video>` element. |
 | `showImageInfo` | `false` | Show the date/place overlay (see below). |
 | `imageInfo` | `["date", "place"]` | Lines to show, in order: `date`, `since`, `place`. |

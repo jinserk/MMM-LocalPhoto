@@ -13,6 +13,8 @@ Module.register("MMM-LocalPhoto", {
 		mediaDir: "media",
 		rescanIntervalSeconds: 300, // fallback rescan; file changes are picked up immediately anyway
 
+		mode: "all", // what to show: "all", "photosOnly" or "videosOnly"
+
 		displayDurationSeconds: 30, // how long each photo is shown
 		transitionDurationSeconds: 2, // fade-in duration
 		displayStyle: "wallpaper", // "wallpaper" (cover screen), "fill" (cover region), "fit-display" (whole image), "absolute"
@@ -25,13 +27,11 @@ Module.register("MMM-LocalPhoto", {
 		applyBlur: false, // blurred copy of the photo behind it (fills empty space)
 		displayOrder: "random_dedupe", // "random", "random_dedupe" (all once before repeating), "newest_first", "oldest_first"
 		video: {
-			enabled: true,
 			autoplay: true,
 			muted: true, // browsers only autoplay muted videos
 			loop: false,
 			controls: false,
 			preload: "metadata",
-			videosOnly: false,
 			maxDurationSeconds: 300 // a video plays to its end, but at most this long
 		},
 		// Date/place of each item (from .mmm-localphoto.json in the media folder,
@@ -64,6 +64,8 @@ Module.register("MMM-LocalPhoto", {
 			...(this.config.absoluteOptions.blurContainer || {})
 		};
 
+		this.mediaMode = this.normalizeMode();
+
 		this.media = [];
 		this.loaded = false;
 		this.errorMessage = null;
@@ -73,6 +75,14 @@ Module.register("MMM-LocalPhoto", {
 		this.playToken = 0;
 		this.dedupeQueue = this.loadState("dedupeQueue", []);
 		this.shownKeys = new Set(this.loadState("shownKeys", []));
+	},
+
+	/** The configured mode; anything else falls back to "all". */
+	normalizeMode () {
+		const mode = this.config.mode;
+		if (["all", "photosOnly", "videosOnly"].includes(mode)) return mode;
+		Log.warn(`${this.name}: unknown mode "${mode}" (use "all", "photosOnly" or "videosOnly"); showing all`);
+		return "all";
 	},
 
 	notificationReceived (notification) {
@@ -92,9 +102,8 @@ Module.register("MMM-LocalPhoto", {
 	},
 
 	setMedia (list) {
-		let media = list.filter((m) => this.getMediaType(m.key) !== "unknown");
-		if (!this.config.video.enabled) media = media.filter((m) => this.getMediaType(m.key) !== "video");
-		if (this.config.video.videosOnly) media = media.filter((m) => this.getMediaType(m.key) === "video");
+		const keep = { all: ["image", "video"], photosOnly: ["image"], videosOnly: ["video"] }[this.mediaMode];
+		let media = list.filter((m) => keep.includes(this.getMediaType(m.key)));
 
 		const byTime = (dir) => (a, b) => dir * (new Date(a.lastModified) - new Date(b.lastModified));
 		if (this.config.displayOrder === "newest_first") media.sort(byTime(-1));
@@ -144,7 +153,8 @@ Module.register("MMM-LocalPhoto", {
 		if (!this.loaded || this.errorMessage || this.media.length === 0) {
 			const msg = document.createElement("div");
 			msg.className = "localphoto-message dimmed small";
-			msg.textContent = this.errorMessage || (this.loaded ? "No photos or videos in the media folder" : "");
+			const what = { all: "photos or videos", photosOnly: "photos", videosOnly: "videos" }[this.mediaMode];
+			msg.textContent = this.errorMessage || (this.loaded ? `No ${what} in the media folder` : "");
 			wrapper.appendChild(msg);
 			return wrapper;
 		}
