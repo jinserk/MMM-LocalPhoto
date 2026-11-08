@@ -14,6 +14,10 @@ Module.register("MMM-LocalPhoto", {
 		rescanIntervalSeconds: 300, // fallback rescan; file changes are picked up immediately anyway
 
 		mode: "all", // what to show: "all", "photosOnly" or "videosOnly"
+		// How photos are drawn: "css" (background image) or "canvas". A browser can
+		// override this with ?photoRenderer=canvas in its own URL, so one display
+		// (e.g. a Raspberry Pi kiosk) can switch without affecting other clients.
+		photoRenderer: "css",
 
 		displayDurationSeconds: 30, // how long each photo is shown
 		transitionDurationSeconds: 2, // fade-in duration
@@ -65,6 +69,15 @@ Module.register("MMM-LocalPhoto", {
 		};
 
 		this.mediaMode = this.normalizeMode();
+		this.renderer = this.resolveRenderer();
+		this.bitmap = null; // last photo drawn in canvas mode (for redraw on resize)
+		if (this.renderer === "canvas") {
+			let t = null;
+			window.addEventListener("resize", () => {
+				clearTimeout(t);
+				t = setTimeout(() => this.bitmap && this.drawPhoto(this.bitmap), 300);
+			});
+		}
 
 		this.media = [];
 		this.loaded = false;
@@ -75,6 +88,15 @@ Module.register("MMM-LocalPhoto", {
 		this.playToken = 0;
 		this.dedupeQueue = this.loadState("dedupeQueue", []);
 		this.shownKeys = new Set(this.loadState("shownKeys", []));
+	},
+
+	/** "css" or "canvas": ?photoRenderer= in this page's URL, else the config. */
+	resolveRenderer () {
+		const fromUrl = new URLSearchParams(location.search).get("photoRenderer");
+		const r = (fromUrl || this.config.photoRenderer || "css").toLowerCase();
+		if (r === "css" || r === "canvas") return r;
+		Log.warn(`${this.name}: unknown photoRenderer "${r}" (use "css" or "canvas"); using css`);
+		return "css";
 	},
 
 	/** The configured mode; anything else falls back to "all". */
@@ -146,7 +168,7 @@ Module.register("MMM-LocalPhoto", {
 
 	getDom () {
 		const wrapper = document.createElement("div");
-		wrapper.className = `MMM-LocalPhoto ${this.config.displayStyle}`;
+		wrapper.className = `MMM-LocalPhoto ${this.config.displayStyle}${this.renderer === "canvas" ? " canvas-renderer" : ""}`;
 		wrapper.style.setProperty("--transition-duration", `${this.config.transitionDurationSeconds || 2}s`);
 		this.wrapper = wrapper;
 
@@ -188,6 +210,17 @@ Module.register("MMM-LocalPhoto", {
 		if (this.config.video.muted) video.setAttribute("muted", ""); // needed for autoplay
 		video.controls = this.config.video.controls;
 		video.setAttribute("playsinline", "");
+		if (this.renderer === "canvas") {
+			// Chromium in low-memory mode (<= 512 MB RAM) draws page content with
+			// 16 shades per channel; canvases keep full 8-bit colour.
+			const pc = document.createElement("canvas");
+			pc.className = "photo-canvas";
+			photoCurrent.appendChild(pc);
+			const bc = document.createElement("canvas");
+			bc.className = "photo-canvas";
+			photoBack.appendChild(bc);
+			this.bitmap = null;
+		}
 		host.append(photoBack, photoCurrent, video);
 
 		const info = document.createElement("div");
@@ -318,6 +351,12 @@ Module.register("MMM-LocalPhoto", {
 				photoCurrent.style.height = side === "horizontal" ? `${Math.round(size / ratio)}px` : `${size}px`;
 			}
 
+			if (this.renderer === "canvas") {
+				this.paintCanvas(item, img, token);
+				this.advanceAfter(this.config.displayDurationSeconds * 1000, token);
+				return;
+			}
+
 			const css = `url("${url.replace(/"/g, "%22")}")`;
 			photoBack.style.backgroundImage = css;
 			requestAnimationFrame(() => {
@@ -339,6 +378,74 @@ Module.register("MMM-LocalPhoto", {
 			this.advanceAfter(1000, token);
 		};
 		img.src = url;
+	},
+
+	/** Canvas renderer: decode, then swap the photo in one frame and restart the fade. */
+	async paintCanvas (item, img, token) {
+		let src = img;
+		try {
+			if (typeof createImageBitmap === "function") src = await createImageBitmap(img); // decoded off the main thread
+		} catch {
+			src = img;
+		}
+		if (token !== this.playToken) {
+			if (src.close) src.close();
+			return;
+		}
+		requestAnimationFrame(() => {
+			if (token !== this.playToken) return;
+			const pc = this.wrapper.querySelector(".photo-current");
+			pc.classList.remove("animated");
+			void pc.offsetWidth; // restart the fade-in
+			if (this.bitmap && this.bitmap !== src && this.bitmap.close) this.bitmap.close();
+			this.bitmap = src;
+			this.drawPhoto(src);
+			pc.classList.add("animated");
+			this.updateAttribution(item);
+			this.updateInfo(item);
+		});
+	},
+
+	/** Draw `src` into the photo canvas (same fit as the CSS renderer) and the backdrop. */
+	drawPhoto (src) {
+		const w = this.wrapper;
+		const pc = w?.querySelector(".photo-current canvas");
+		if (!pc) return;
+		const dpr = window.devicePixelRatio || 1;
+		const box = pc.getBoundingClientRect();
+		const cw = Math.max(1, Math.min(4096, Math.round(box.width * dpr)));
+		const ch = Math.max(1, Math.min(4096, Math.round(box.height * dpr)));
+		if (pc.width !== cw || pc.height !== ch) {
+			pc.width = cw;
+			pc.height = ch;
+		}
+		const iw = src.width, ih = src.height;
+		const style = this.config.displayStyle;
+		let dw = cw, dh = ch;
+		if (!(style === "absolute" && this.config.absoluteOptions?.enabled)) {
+			const k = style === "wallpaper" || style === "fill" ? Math.max(cw / iw, ch / ih) : Math.min(cw / iw, ch / ih);
+			dw = iw * k;
+			dh = ih * k;
+		}
+		const ctx = pc.getContext("2d");
+		ctx.clearRect(0, 0, cw, ch);
+		ctx.imageSmoothingEnabled = true;
+		ctx.imageSmoothingQuality = "high";
+		ctx.drawImage(src, (cw - dw) / 2, (ch - dh) / 2, dw, dh);
+
+		// blurred, darkened copy behind it (applyBlur), drawn small and scaled up by CSS
+		const bc = w.querySelector(".photo-back canvas");
+		if (bc && this.config.applyBlur) {
+			const bb = bc.getBoundingClientRect();
+			const bw = Math.max(1, Math.round(bb.width / 4)), bh = Math.max(1, Math.round(bb.height / 4));
+			bc.width = bw;
+			bc.height = bh;
+			const b = bc.getContext("2d");
+			const k = Math.max(bw / iw, bh / ih);
+			b.filter = "blur(3px) brightness(40%)";
+			b.drawImage(src, (bw - iw * k) / 2, (bh - ih * k) / 2, iw * k, ih * k);
+			b.filter = "none";
+		}
 	},
 
 	/** Date / "x ago" / place of the item, one per line (only lines with data). */

@@ -50,6 +50,19 @@
 	transform: scale(1.05); /* hide the blur's soft edge */
 }
 
+/* canvas renderer (photoRenderer: "canvas") */
+.MMM-LocalPhoto canvas.photo-canvas {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	display: block;
+}
+
+.MMM-LocalPhoto.canvas-renderer .photo-back {
+	filter: none; /* the blur is drawn into its canvas */
+}
+
 .MMM-LocalPhoto.wallpaper .photo-current,
 .MMM-LocalPhoto.fill .photo-current {
 	background-size: cover;

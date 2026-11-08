@@ -43,6 +43,7 @@ Put your files in `MMM-LocalPhoto/media/`, or point `mediaDir` at any folder.
 | Option | Default | Description |
 |---|---|---|
 | `mediaDir` | `"media"` | Folder to scan (recursively). Relative paths are relative to the module folder. Read on the server only. |
+| `photoRenderer` | `"css"` | How photos are drawn: `"css"` (background image) or `"canvas"`. A browser can override it with `?photoRenderer=canvas` in its URL (see below). |
 | `mode` | `"all"` | What to show: `"all"` (photos and videos), `"photosOnly"` or `"videosOnly"`. |
 | `rescanIntervalSeconds` | `300` | Fallback full rescan; `0` disables it. Changes are normally picked up within ~2 s via file watching. |
 | `displayDurationSeconds` | `30` | How long each photo is shown. |
@@ -84,6 +85,20 @@ The info comes from an optional **`.mmm-localphoto.json`** in the media folder. 
 - `place` is any short text.
 
 Files without an entry show no overlay. The file is re-read on every change, so tools can update it while the slideshow runs. [photo-sync](https://github.com/jinserk/magicmirror/tree/main/photo-sync) writes it, using offline reverse geocoding (GeoNames) for the place names.
+
+## Raspberry Pi and other low-memory displays
+
+On devices with about 512 MB of RAM (e.g. a Raspberry Pi Zero 2 W), Chromium turns on a low-memory mode that draws page content with **16 shades per colour channel** instead of 256. Photos then look flat, with visible bands and dither in skies and other smooth areas.
+
+Canvases aren't affected, so `photoRenderer: "canvas"` draws each photo into a `<canvas>` and keeps full 8-bit colour. The fit, fade and blurred backdrop are the same as the CSS renderer.
+
+To switch only that display, open the mirror there with the option in the URL, and leave other browsers on the plain URL:
+
+```
+http://<mirror>:8080/?photoRenderer=canvas
+```
+
+The setting survives MagicMirror's automatic reloads. Videos aren't affected by it.
 
 ## Media format tips
 
