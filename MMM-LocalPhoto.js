@@ -36,7 +36,10 @@ Module.register("MMM-LocalPhoto", {
 			loop: false,
 			controls: false,
 			preload: "metadata",
-			maxDurationSeconds: 300 // a video plays to its end, but at most this long
+			maxDurationSeconds: 300, // a video plays to its end, but at most this long
+			// pause between two videos so the previous decoder is released first
+			// (null: 1000 ms with the canvas renderer, 0 otherwise)
+			switchDelayMs: null
 		},
 		// Date/place of each item (from .mmm-localphoto.json in the media folder,
 		// e.g. written by photo-sync). Lines in this order: "date", "since", "place".
@@ -282,13 +285,31 @@ Module.register("MMM-LocalPhoto", {
 		const token = ++this.playToken;
 		const w = this.wrapper;
 		const video = w.querySelector(".video-current");
+		const v = this.config.video;
+
+		// Fallback in case the video never loads or reports no duration.
+		this.advanceAfter(this.config.displayDurationSeconds * 1000, token);
+
+		// Video after video: drop the previous one first, so two hardware
+		// decoders don't hold GPU memory at the same time.
+		const delay = v.switchDelayMs ?? (this.renderer === "canvas" ? 1000 : 0);
+		if (video.getAttribute("src") && delay > 0) {
+			video.pause();
+			video.removeAttribute("src");
+			video.load();
+			setTimeout(() => token === this.playToken && this.loadVideo(item, token), delay);
+		} else {
+			this.loadVideo(item, token);
+		}
+	},
+
+	loadVideo (item, token) {
+		const w = this.wrapper;
+		const video = w.querySelector(".video-current");
 		const photoCurrent = w.querySelector(".photo-current");
 		const photoBack = w.querySelector(".photo-back");
 		const v = this.config.video;
 		const capMs = Math.max(5, Number(v.maxDurationSeconds) || 300) * 1000;
-
-		// Fallback in case the video never loads or reports no duration.
-		this.advanceAfter(this.config.displayDurationSeconds * 1000, token);
 
 		video.onloadedmetadata = () => {
 			if (token !== this.playToken) return;
@@ -301,6 +322,7 @@ Module.register("MMM-LocalPhoto", {
 			photoCurrent.style.display = "none";
 			photoBack.style.display = "none";
 			video.style.display = "block";
+			this.releasePhotoLayers();
 			this.updateAttribution(item);
 			this.updateInfo(item);
 			if (v.autoplay) video.play().catch(() => {});
@@ -378,6 +400,22 @@ Module.register("MMM-LocalPhoto", {
 			this.advanceAfter(1000, token);
 		};
 		img.src = url;
+	},
+
+	/** Free the hidden photo's memory (decoded image, canvas, texture) while a video plays. */
+	releasePhotoLayers () {
+		const w = this.wrapper;
+		if (this.renderer === "canvas") {
+			if (this.bitmap?.close) this.bitmap.close();
+			this.bitmap = null;
+			for (const c of w.querySelectorAll(".photo-current canvas, .photo-back canvas")) {
+				c.width = 1;
+				c.height = 1;
+			}
+		} else {
+			w.querySelector(".photo-current").style.backgroundImage = "none";
+			w.querySelector(".photo-back").style.backgroundImage = "none";
+		}
 	},
 
 	/** Canvas renderer: decode, then swap the photo in one frame and restart the fade. */

@@ -55,6 +55,7 @@ Put your files in `MMM-LocalPhoto/media/`, or point `mediaDir` at any folder.
 | `video.muted` | `true` | Browsers only autoplay muted videos. |
 | `video.loop` | `false` | Loop a video until `displayDurationSeconds` or the cap is reached, whichever is longer. |
 | `video.maxDurationSeconds` | `300` | Longest time one video plays before moving on. |
+| `video.switchDelayMs` | `null` | Pause between two videos, so the previous video's hardware decoder is released before the next one starts. `null`: 1000 ms with the canvas renderer, 0 otherwise. |
 | `video.autoplay`, `video.controls`, `video.preload` | `true`, `false`, `"metadata"` | Passed to the `<video>` element. |
 | `showImageInfo` | `false` | Show the date/place overlay (see below). |
 | `imageInfo` | `["date", "place"]` | Lines to show, in order: `date`, `since`, `place`. |
@@ -99,6 +100,8 @@ http://<mirror>:8080/?photoRenderer=canvas
 ```
 
 The setting survives MagicMirror's automatic reloads. Videos aren't affected by it.
+
+To save memory, the hidden photo (decoded image and canvases) is freed while a video plays. With the canvas renderer the module also pauses 1 s between two videos (`video.switchDelayMs`), so two hardware decoders never hold GPU memory at the same time.
 
 ## Media format tips
 
