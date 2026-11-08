@@ -1,0 +1,138 @@
+/* MMM-LocalPhoto. Based on MMM-S3Photos' styles (MIT); all rules are scoped
+ * to .MMM-LocalPhoto so they don't leak into other modules. */
+
+.MMM-LocalPhoto {
+	position: relative;
+	min-width: 300px;
+	min-height: 300px;
+	overflow: hidden;
+}
+
+/* fullscreen_above / fullscreen_below: cover the whole viewport */
+.region.fullscreen .MMM-LocalPhoto {
+	position: fixed;
+	inset: 0;
+	width: 100vw;
+	height: 100vh;
+}
+
+.MMM-LocalPhoto.fill {
+	width: 100%;
+	height: 100%;
+}
+
+.MMM-LocalPhoto .localphoto-message {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	text-align: center;
+}
+
+/* photo layers */
+.MMM-LocalPhoto .photo-back,
+.MMM-LocalPhoto .photo-current {
+	position: absolute;
+	inset: 0;
+	background-position: center;
+	background-repeat: no-repeat;
+	z-index: 0;
+}
+
+/* blurred, dimmed copy behind the photo (applyBlur) */
+.MMM-LocalPhoto .photo-back {
+	background-size: cover;
+	filter: blur(10px) brightness(40%);
+	transform: scale(1.05); /* hide the blur's soft edge */
+}
+
+.MMM-LocalPhoto.wallpaper .photo-current,
+.MMM-LocalPhoto.fill .photo-current {
+	background-size: cover;
+}
+
+.MMM-LocalPhoto.fit-display .photo-current {
+	background-size: contain;
+}
+
+.MMM-LocalPhoto .photo-current.animated {
+	animation: localphoto-fade var(--transition-duration, 2s) forwards;
+}
+
+@keyframes localphoto-fade {
+	from { opacity: 0; }
+	to { opacity: 1; }
+}
+
+/* video */
+.MMM-LocalPhoto .video-current {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	background: #000;
+	z-index: 1;
+	transform: translateZ(0); /* GPU compositing */
+}
+
+.MMM-LocalPhoto.fit-display .video-current {
+	object-fit: contain;
+}
+
+/* absolute mode: fixed-size box */
+.MMM-LocalPhoto.absolute {
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	transition: width var(--transition-duration, 2s) ease-in-out,
+		height var(--transition-duration, 2s) ease-in-out;
+}
+
+.MMM-LocalPhoto .blur-enabled {
+	position: relative;
+	width: var(--blur-width, 500px);
+	height: var(--blur-height, 500px);
+	overflow: hidden;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+}
+
+.MMM-LocalPhoto.absolute .photo-current,
+.MMM-LocalPhoto.absolute .video-current {
+	inset: auto;
+	left: 50%;
+	top: 50%;
+	transform: translate(-50%, -50%);
+}
+
+.MMM-LocalPhoto.absolute .video-current {
+	width: auto;
+	height: auto;
+	max-width: 100%;
+	max-height: 100%;
+}
+
+/* attribution overlay */
+.MMM-LocalPhoto .attribution-container {
+	position: absolute;
+	margin: 10px;
+	padding: 4px 8px;
+	border-radius: 18px;
+	background-color: rgba(0, 0, 0, 0.5);
+	z-index: 2;
+}
+
+.MMM-LocalPhoto .attribution-container.top-left { top: 0; left: 0; }
+.MMM-LocalPhoto .attribution-container.top-right { top: 0; right: 0; }
+.MMM-LocalPhoto .attribution-container.bottom-left { bottom: 0; left: 0; }
+.MMM-LocalPhoto .attribution-container.bottom-right { bottom: 0; right: 0; }
+
+.MMM-LocalPhoto .attribution {
+	font-size: 18px;
+	line-height: 1;
+	color: #fff;
+	text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+}

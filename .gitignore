@@ -1,0 +1,4 @@
+node_modules/
+# local media is never part of the module
+media/*
+!media/.gitkeep

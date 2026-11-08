@@ -1,0 +1,30 @@
+{
+  "name": "mmm-localphoto",
+  "version": "1.0.0",
+  "description": "MagicMirror² module: photo and video slideshow from a local folder.",
+  "main": "MMM-LocalPhoto.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jinserk/MMM-LocalPhoto.git"
+  },
+  "homepage": "https://github.com/jinserk/MMM-LocalPhoto#readme",
+  "bugs": {
+    "url": "https://github.com/jinserk/MMM-LocalPhoto/issues"
+  },
+  "keywords": [
+    "MagicMirror²",
+    "photo",
+    "video",
+    "slideshow",
+    "background",
+    "local"
+  ],
+  "author": "Jinserk Baik",
+  "contributors": [
+    "uphillcheddar (MMM-S3Photos, https://github.com/uphillcheddar/MMM-S3Photos)"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  }
+}
