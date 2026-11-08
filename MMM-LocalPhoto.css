@@ -21,6 +21,8 @@
 	height: 100%;
 }
 
+/* "No photos or videos…" / errors: always dimmed, even if a custom.css
+ * brightens .dimmed (a common tweak for slideshows) */
 .MMM-LocalPhoto .localphoto-message {
 	position: absolute;
 	inset: 0;
@@ -28,6 +30,7 @@
 	align-items: center;
 	justify-content: center;
 	text-align: center;
+	color: var(--color-text-dimmed, #666);
 }
 
 /* photo layers */
