@@ -34,6 +34,12 @@ Module.register("MMM-LocalPhoto", {
 			videosOnly: false,
 			maxDurationSeconds: 300 // a video plays to its end, but at most this long
 		},
+		// Date/place of each item (from .mmm-localphoto.json in the media folder,
+		// e.g. written by photo-sync). Lines in this order: "date", "since", "place".
+		showImageInfo: false,
+		imageInfo: ["date", "place"],
+		imageInfoDateFormat: "LL", // moment.js format, e.g. "MMMM D, YYYY"
+		imageInfoCorner: "bottom-right", // "top-left", "top-right", "bottom-left", "bottom-right"
 		attribution: {
 			enabled: false,
 			attributions: {}, // { "<top-level folder>": "text shown for its files" }
@@ -174,6 +180,11 @@ Module.register("MMM-LocalPhoto", {
 		video.setAttribute("playsinline", "");
 		host.append(photoBack, photoCurrent, video);
 
+		const info = document.createElement("div");
+		info.className = `photo-info ${this.config.imageInfoCorner || "bottom-right"}`;
+		info.style.display = "none";
+		wrapper.appendChild(info);
+
 		const attr = document.createElement("div");
 		attr.className = "attribution-container";
 		attr.style.display = "none";
@@ -248,6 +259,7 @@ Module.register("MMM-LocalPhoto", {
 			photoBack.style.display = "none";
 			video.style.display = "block";
 			this.updateAttribution(item);
+			this.updateInfo(item);
 			if (v.autoplay) video.play().catch(() => {});
 		};
 		video.onended = () => {
@@ -307,6 +319,7 @@ Module.register("MMM-LocalPhoto", {
 					: this.config.displayStyle === "wallpaper" || this.config.displayStyle === "fill" ? "cover" : "contain";
 				photoCurrent.classList.add("animated");
 				this.updateAttribution(item);
+				this.updateInfo(item);
 			});
 			this.advanceAfter(this.config.displayDurationSeconds * 1000, token);
 		};
@@ -316,6 +329,31 @@ Module.register("MMM-LocalPhoto", {
 			this.advanceAfter(1000, token);
 		};
 		img.src = url;
+	},
+
+	/** Date / "x ago" / place of the item, one per line (only lines with data). */
+	updateInfo (item) {
+		const el = this.wrapper?.querySelector(".photo-info");
+		if (!el) return;
+		const info = item.info || {};
+		const lines = [];
+		if (this.config.showImageInfo) {
+			// keep the camera's own UTC offset ("…-04:00"): show the time as it was there
+			const m = info.taken && typeof moment === "function"
+				? (/[+-]\d\d:?\d\d$|Z$/.test(info.taken) ? moment.parseZone(info.taken) : moment(info.taken))
+				: null;
+			for (const field of this.config.imageInfo || []) {
+				if (field === "date" && m?.isValid()) lines.push(m.format(this.config.imageInfoDateFormat));
+				else if (field === "since" && m?.isValid()) lines.push(m.fromNow());
+				else if ((field === "place" || field === "geo") && info.place) lines.push(info.place);
+			}
+		}
+		el.replaceChildren(...lines.map((text) => {
+			const line = document.createElement("div");
+			line.textContent = text; // text only, never HTML
+			return line;
+		}));
+		el.style.display = lines.length ? "block" : "none";
 	},
 
 	updateAttribution (item) {

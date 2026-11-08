@@ -118,6 +118,22 @@
 	max-height: 100%;
 }
 
+/* date / place overlay (showImageInfo) */
+.MMM-LocalPhoto .photo-info {
+	position: absolute;
+	margin: 20px 24px;
+	font-size: 0.6rem;
+	line-height: 1.35;
+	color: #fff;
+	text-shadow: 0 0 2px #000, 0 0 4px rgb(0 0 0 / 0.8);
+	z-index: 2;
+}
+
+.MMM-LocalPhoto .photo-info.top-left { top: 0; left: 0; text-align: left; }
+.MMM-LocalPhoto .photo-info.top-right { top: 0; right: 0; text-align: right; }
+.MMM-LocalPhoto .photo-info.bottom-left { bottom: 0; left: 0; text-align: left; }
+.MMM-LocalPhoto .photo-info.bottom-right { bottom: 0; right: 0; text-align: right; }
+
 /* attribution overlay */
 .MMM-LocalPhoto .attribution-container {
 	position: absolute;

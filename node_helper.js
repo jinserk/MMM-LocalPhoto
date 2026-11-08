@@ -23,6 +23,9 @@ const DEFAULTS = { mediaDir: "media", rescanIntervalSeconds: 300 };
 // A file is listed only once it hasn't changed for this long, so a file that
 // is still being copied (plain `cp`) is not shown half-written.
 const SETTLE_MS = 3000;
+// Optional per-file info (capture date, place) written by tools such as
+// photo-sync: { "version": 1, "items": { "<key>": { "taken": ISO, "place": "..." } } }
+const INFO_FILE = ".mmm-localphoto.json";
 
 module.exports = NodeHelper.create({
 	start () {
@@ -94,17 +97,41 @@ module.exports = NodeHelper.create({
 	/** Walk mediaDir; one scan at a time. */
 	scan () {
 		if (!this.scanning) {
-			this.scanning = this.walk(this.mediaDir)
-				.then((files) => {
+			this.scanning = Promise.all([this.walk(this.mediaDir), this.readInfo()])
+				.then(([files, info]) => {
 					files.sort((a, b) => a.key.localeCompare(b.key));
+					for (const f of files) {
+						if (info[f.key]) f.info = info[f.key];
+					}
 					this.media = files;
-					this.signature = files.map((f) => `${f.key}:${f.size}:${f.lastModified}`).join("|");
+					this.signature = files.map((f) => `${f.key}:${f.size}:${f.lastModified}:${JSON.stringify(f.info || "")}`).join("|");
 				})
 				.finally(() => {
 					this.scanning = null;
 				});
 		}
 		return this.scanning;
+	},
+
+	/** INFO_FILE in the media folder; only short "taken"/"place" strings are kept. */
+	async readInfo () {
+		let data;
+		try {
+			data = JSON.parse(await fsp.readFile(path.join(this.mediaDir, INFO_FILE), "utf8"));
+		} catch (err) {
+			if (err.code !== "ENOENT") Log.warn(`${this.name}: ignoring ${INFO_FILE}: ${err.message}`);
+			return {};
+		}
+		const out = {};
+		for (const [key, v] of Object.entries(data?.items || {})) {
+			if (!v || typeof v !== "object") continue;
+			const info = {};
+			for (const field of ["taken", "place"]) {
+				if (typeof v[field] === "string" && v[field].length <= 200) info[field] = v[field];
+			}
+			if (Object.keys(info).length) out[key] = info;
+		}
+		return out;
 	},
 
 	async walk (dir, prefix = "") {

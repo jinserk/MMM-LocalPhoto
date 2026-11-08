@@ -56,7 +56,35 @@ Put your files in `MMM-LocalPhoto/media/`, or point `mediaDir` at any folder.
 | `video.maxDurationSeconds` | `300` | Longest time one video plays before moving on. |
 | `video.videosOnly` | `false` | Show only videos. |
 | `video.autoplay`, `video.controls`, `video.preload` | `true`, `false`, `"metadata"` | Passed to the `<video>` element. |
+| `showImageInfo` | `false` | Show the date/place overlay (see below). |
+| `imageInfo` | `["date", "place"]` | Lines to show, in order: `date`, `since`, `place`. |
+| `imageInfoDateFormat` | `"LL"` | moment.js date format. |
+| `imageInfoCorner` | `"bottom-right"` | `top-left`, `top-right`, `bottom-left`, `bottom-right`. |
 | `attribution` | disabled | `{ enabled, attributions: { "<top folder>": "text" }, position: "static"\|"dynamic", corner, relativeTo }` |
+
+## Date and place overlay
+
+Set `showImageInfo: true` to show each item's date and place in a corner:
+
+```js
+showImageInfo: true,
+imageInfo: ["date", "place"],      // any of "date", "since" ("2 weeks ago"), "place"
+imageInfoDateFormat: "MMMM D, YYYY", // moment.js format (default "LL")
+imageInfoCorner: "bottom-right"
+```
+
+The info comes from an optional **`.mmm-localphoto.json`** in the media folder. It's a hidden file, so it's never shown or served:
+
+```json
+{ "version": 1, "items": {
+    "2026/IMG_3123.jpg": { "taken": "2026-10-24T11:28:18-04:00", "place": "Bar Harbor, Maine" } } }
+```
+
+- Keys are paths relative to the media folder.
+- `taken` is an ISO date. With an offset, it's shown as the local time where the photo was taken.
+- `place` is any short text.
+
+Files without an entry show no overlay. The file is re-read on every change, so tools can update it while the slideshow runs. [photo-sync](https://github.com/jinserk/magicmirror/tree/main/photo-sync) writes it, using offline reverse geocoding (GeoNames) for the place names.
 
 ## Media format tips
 
