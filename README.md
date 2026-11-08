@@ -50,6 +50,7 @@ Put your files in `MMM-LocalPhoto/media/`, or point `mediaDir` at any folder.
 | `transitionDurationSeconds` | `2` | Fade-in duration. |
 | `displayStyle` | `"wallpaper"` | `wallpaper`, `fill`, `fit-display` or `absolute`. |
 | `applyBlur` | `false` | Blurred, dimmed copy of the photo behind it, filling empty space. |
+| `edgeFade` | `0` | Softly fades a photo or video into the black bars beside it (`fit-display`): `0` (off), a percentage of the item's shorter side (`"5%"`), or pixels (`40`). Only the edges that meet a bar fade (left/right for a portrait photo on a landscape screen); an item with the screen's aspect ratio, or one that covers the screen, isn't faded. A browser can override it with `?edgeFade=...` in its URL. Meant for a black background (`applyBlur: false`); not used with `absoluteOptions`. |
 | `absoluteOptions` | see source | `{ enabled, side: "horizontal"\|"vertical", size, blurContainer: { width, height } }` for `absolute`. |
 | `displayOrder` | `"random_dedupe"` | `random_dedupe`, `random`, `newest_first`, `oldest_first` (by file modification time). |
 | `video.muted` | `true` | Browsers only autoplay muted videos. |

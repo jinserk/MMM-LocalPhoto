@@ -97,6 +97,23 @@
 	object-fit: contain;
 }
 
+/* edge fade (edgeFade): positioned over the item's on-screen rectangle */
+.MMM-LocalPhoto .edge-fade {
+	position: absolute;
+	pointer-events: none;
+	z-index: 1;
+}
+
+.MMM-LocalPhoto .edge-fade canvas {
+	position: absolute;
+	display: block;
+}
+
+.MMM-LocalPhoto .edge-fade .left { left: 0; top: 0; width: var(--fade); height: 100%; }
+.MMM-LocalPhoto .edge-fade .right { right: 0; top: 0; width: var(--fade); height: 100%; }
+.MMM-LocalPhoto .edge-fade .top { left: 0; top: 0; width: 100%; height: var(--fade); }
+.MMM-LocalPhoto .edge-fade .bottom { left: 0; bottom: 0; width: 100%; height: var(--fade); }
+
 /* absolute mode: fixed-size box */
 .MMM-LocalPhoto.absolute {
 	display: flex;

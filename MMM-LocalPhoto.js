@@ -29,6 +29,11 @@ Module.register("MMM-LocalPhoto", {
 			blurContainer: { width: 500, height: 500 }
 		},
 		applyBlur: false, // blurred copy of the photo behind it (fills empty space)
+		// Soft fade where a photo/video meets the black bars (fit-display):
+		// 0 (off), "5%" of the item's shorter side, or pixels (e.g. 40). Items
+		// that fill the screen aren't faded. A browser can override it with
+		// ?edgeFade=... in its own URL.
+		edgeFade: 0,
 		displayOrder: "random_dedupe", // "random", "random_dedupe" (all once before repeating), "newest_first", "oldest_first"
 		video: {
 			autoplay: true,
@@ -73,14 +78,17 @@ Module.register("MMM-LocalPhoto", {
 
 		this.mediaMode = this.normalizeMode();
 		this.renderer = this.resolveRenderer();
+		this.edgeFade = this.resolveEdgeFade();
+		this.fadeDims = null; // size of the item shown, for the edge fade
 		this.bitmap = null; // last photo drawn in canvas mode (for redraw on resize)
-		if (this.renderer === "canvas") {
-			let t = null;
-			window.addEventListener("resize", () => {
-				clearTimeout(t);
-				t = setTimeout(() => this.bitmap && this.drawPhoto(this.bitmap), 300);
-			});
-		}
+		let t = null;
+		window.addEventListener("resize", () => {
+			clearTimeout(t);
+			t = setTimeout(() => {
+				if (this.bitmap) this.drawPhoto(this.bitmap);
+				else if (this.fadeDims) this.placeEdgeFade(...this.fadeDims);
+			}, 300);
+		});
 
 		this.media = [];
 		this.loaded = false;
@@ -100,6 +108,15 @@ Module.register("MMM-LocalPhoto", {
 		if (r === "css" || r === "canvas") return r;
 		Log.warn(`${this.name}: unknown photoRenderer "${r}" (use "css" or "canvas"); using css`);
 		return "css";
+	},
+
+	/** Edge fade width: ?edgeFade= in this page's URL, else the config. { pct } or { px }, or null (off). */
+	resolveEdgeFade () {
+		const raw = new URLSearchParams(location.search).get("edgeFade") ?? this.config.edgeFade;
+		const s = String(raw ?? "0").trim();
+		const n = parseFloat(s);
+		if (!Number.isFinite(n) || n <= 0) return null;
+		return s.endsWith("%") ? { pct: Math.min(n, 50) } : { px: n };
 	},
 
 	/** The configured mode; anything else falls back to "all". */
@@ -225,6 +242,19 @@ Module.register("MMM-LocalPhoto", {
 			this.bitmap = null;
 		}
 		host.append(photoBack, photoCurrent, video);
+		if (this.edgeFade && !(this.config.displayStyle === "absolute" && this.config.absoluteOptions?.enabled)) {
+			// four thin canvases (black to transparent) over the item's edges
+			const fade = document.createElement("div");
+			fade.className = "edge-fade";
+			fade.style.display = "none";
+			for (const side of ["left", "right", "top", "bottom"]) {
+				const c = document.createElement("canvas");
+				c.className = side;
+				fade.appendChild(c);
+			}
+			host.appendChild(fade);
+			this.fadeSize = 0;
+		}
 
 		const info = document.createElement("div");
 		info.className = `photo-info ${this.config.imageInfoCorner || "bottom-right"}`;
@@ -323,6 +353,7 @@ Module.register("MMM-LocalPhoto", {
 			photoBack.style.display = "none";
 			video.style.display = "block";
 			this.releasePhotoLayers();
+			this.placeEdgeFade(video.videoWidth, video.videoHeight);
 			this.updateAttribution(item);
 			this.updateInfo(item);
 			if (v.autoplay) video.play().catch(() => {});
@@ -389,6 +420,7 @@ Module.register("MMM-LocalPhoto", {
 					? "100% 100%"
 					: this.config.displayStyle === "wallpaper" || this.config.displayStyle === "fill" ? "cover" : "contain";
 				photoCurrent.classList.add("animated");
+				this.placeEdgeFade(img.naturalWidth, img.naturalHeight);
 				this.updateAttribution(item);
 				this.updateInfo(item);
 			});
@@ -400,6 +432,59 @@ Module.register("MMM-LocalPhoto", {
 			this.advanceAfter(1000, token);
 		};
 		img.src = url;
+	},
+
+	/** Put the edge fade over the on-screen rectangle of an item of size mw x mh. */
+	placeEdgeFade (mw, mh) {
+		const fade = this.wrapper?.querySelector(".edge-fade");
+		if (!fade) return;
+		this.fadeDims = [mw, mh];
+		const bw = this.wrapper.clientWidth, bh = this.wrapper.clientHeight;
+		if (!mw || !mh || !bw || !bh) {
+			fade.style.display = "none";
+			return;
+		}
+		// same fit as the photo/video: cover (wallpaper, fill) or contain
+		const style = this.config.displayStyle;
+		const k = style === "wallpaper" || style === "fill" ? Math.max(bw / mw, bh / mh) : Math.min(bw / mw, bh / mh);
+		// only edges that meet a black bar fade; an item that fills the screen
+		// (same aspect ratio, or cover) has none
+		const barX = (bw - mw * k) / 2, barY = (bh - mh * k) / 2;
+		const sides = { left: barX >= 2, right: barX >= 2, top: barY >= 2, bottom: barY >= 2 };
+		if (!sides.left && !sides.top) {
+			fade.style.display = "none";
+			return;
+		}
+		// whole pixels, 1 px wider on the faded sides: the item may sit at a
+		// sub-pixel position, and its outermost pixels must stay covered
+		const x0 = sides.left ? Math.max(0, Math.floor(barX) - 1) : 0;
+		const y0 = sides.top ? Math.max(0, Math.floor(barY) - 1) : 0;
+		const w = bw - 2 * x0, h = bh - 2 * y0;
+		const f = this.edgeFade;
+		const size = Math.round(Math.min(f.pct ? Math.min(w, h) * f.pct / 100 : f.px, Math.min(w, h) / 2));
+		if (size < 1) {
+			fade.style.display = "none";
+			return;
+		}
+		Object.assign(fade.style, { display: "block", left: `${x0}px`, top: `${y0}px`, width: `${w}px`, height: `${h}px` });
+		fade.style.setProperty("--fade", `${size}px`);
+		for (const c of fade.children) c.style.display = sides[c.className] ? "block" : "none";
+		if (size === this.fadeSize) return;
+		this.fadeSize = size;
+		// ramp: opaque black at the outer edge, eased to transparent inside
+		for (const c of fade.children) {
+			const along = c.className === "left" || c.className === "right";
+			const outerAtEnd = c.className === "right" || c.className === "bottom";
+			c.width = along ? size : 1;
+			c.height = along ? 1 : size;
+			const ctx = c.getContext("2d");
+			const img = ctx.createImageData(c.width, c.height);
+			for (let i = 0; i < size; i++) {
+				const t = (outerAtEnd ? size - 1 - i : i) / Math.max(1, size - 1);
+				img.data[i * 4 + 3] = Math.round(255 * (1 - t * t * (3 - 2 * t)));
+			}
+			ctx.putImageData(img, 0, 0);
+		}
 	},
 
 	/** Free the hidden photo's memory (decoded image, canvas, texture) while a video plays. */
@@ -470,6 +555,7 @@ Module.register("MMM-LocalPhoto", {
 		ctx.imageSmoothingEnabled = true;
 		ctx.imageSmoothingQuality = "high";
 		ctx.drawImage(src, (cw - dw) / 2, (ch - dh) / 2, dw, dh);
+		this.placeEdgeFade(iw, ih);
 
 		// blurred, darkened copy behind it (applyBlur), drawn small and scaled up by CSS
 		const bc = w.querySelector(".photo-back canvas");
