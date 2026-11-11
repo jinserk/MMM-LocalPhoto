@@ -29,10 +29,10 @@ Module.register("MMM-LocalPhoto", {
 			blurContainer: { width: 500, height: 500 }
 		},
 		applyBlur: false, // blurred copy of the photo behind it (fills empty space)
-		// Soft fade where a photo/video meets the black bars (fit-display):
-		// 0 (off), "5%" of the item's shorter side, or pixels (e.g. 40). Items
-		// that fill the screen aren't faded. A browser can override it with
-		// ?edgeFade=... in its own URL.
+		// Soft fade where a photo meets the black bars (fit-display; videos are
+		// shown without it): 0 (off), "5%" of the photo's shorter side, or pixels
+		// (e.g. 40). Photos that fill the screen aren't faded. A browser can
+		// override it with ?edgeFade=... in its own URL.
 		edgeFade: 0,
 		displayOrder: "random_dedupe", // "random", "random_dedupe" (all once before repeating), "newest_first", "oldest_first"
 		video: {
@@ -353,7 +353,7 @@ Module.register("MMM-LocalPhoto", {
 			photoBack.style.display = "none";
 			video.style.display = "block";
 			this.releasePhotoLayers();
-			this.placeEdgeFade(video.videoWidth, video.videoHeight);
+			this.hideEdgeFade();
 			this.updateAttribution(item);
 			this.updateInfo(item);
 			if (v.autoplay) video.play().catch(() => {});
@@ -432,6 +432,13 @@ Module.register("MMM-LocalPhoto", {
 			this.advanceAfter(1000, token);
 		};
 		img.src = url;
+	},
+
+	/** Videos are shown without the edge fade; the next photo brings it back. */
+	hideEdgeFade () {
+		const fade = this.wrapper?.querySelector(".edge-fade");
+		if (fade) fade.style.display = "none";
+		this.fadeDims = null;
 	},
 
 	/** Put the edge fade over the on-screen rectangle of an item of size mw x mh. */
