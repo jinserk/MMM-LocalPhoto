@@ -58,6 +58,7 @@ Put your files in `MMM-LocalPhoto/media/`, or point `mediaDir` at any folder.
 | `video.maxDurationSeconds` | `300` | Longest time one video plays before moving on. |
 | `video.switchDelayMs` | `null` | Pause between two videos, so the previous video's hardware decoder is released before the next one starts. `null`: 1000 ms with the canvas renderer, 0 otherwise. |
 | `video.autoplay`, `video.controls`, `video.preload` | `true`, `false`, `"metadata"` | Passed to the `<video>` element. |
+| `videoPlayer` | `"browser"` | Who plays videos: `"browser"` (a `<video>` element) or `"native"` (a player on the display device, see below). A browser can override it with `?videoPlayer=native` in its URL. |
 | `showImageInfo` | `false` | Show the date/place overlay (see below). |
 | `imageInfo` | `["date", "place"]` | Lines to show, in order: `date`, `since`, `place`. |
 | `imageInfoDateFormat` | `"LL"` | moment.js date format. |
@@ -103,6 +104,16 @@ http://<mirror>:8080/?photoRenderer=canvas
 The setting survives MagicMirror's automatic reloads. Videos aren't affected by it.
 
 To save memory, the hidden photo (decoded image and canvases) is freed while a video plays. With the canvas renderer the module also pauses 1 s between two videos (`video.switchDelayMs`), so two hardware decoders never hold GPU memory at the same time.
+
+### Native video player
+
+A small device can play videos much better in a native player than in the browser (a Raspberry Pi 2 drops about 1 in 4 frames of 1080p30 in Chromium, and none in mpv). With `videoPlayer: "native"` (or `?videoPlayer=native`) the module hands each video to such a player instead of playing it itself:
+
+1. It calls `window.localPhotoNativeVideo(json)` with `{"token", "url", "maxSeconds"}`: the absolute URL of the video, and the longest time it may play.
+2. The player shows the video on top of the browser window and stops at `maxSeconds` at the latest. The current photo stays underneath.
+3. When the video ends, the player dispatches `localphoto-native-video-ended` on `window` with `detail: {token, ok}`. The module then moves on (after 1 s if `ok` is false).
+
+The function is provided by a helper on the display device (for example through the Chrome DevTools Protocol's `Runtime.addBinding`). If it doesn't exist, videos play in the browser as usual.
 
 ## Media format tips
 

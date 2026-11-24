@@ -46,6 +46,12 @@ Module.register("MMM-LocalPhoto", {
 			// (null: 1000 ms with the canvas renderer, 0 otherwise)
 			switchDelayMs: null
 		},
+		// Who plays videos: "browser" (a <video> element) or "native" (a player on
+		// the display device, e.g. mpv on a Raspberry Pi, called through the
+		// window.localPhotoNativeVideo function its helper adds to the page). A
+		// browser can override it with ?videoPlayer=native in its own URL. Without
+		// the helper, videos play in the browser.
+		videoPlayer: "browser",
 		// Date/place of each item (from .mmm-localphoto.json in the media folder,
 		// e.g. written by photo-sync). Lines in this order: "date", "since", "place".
 		showImageInfo: false,
@@ -79,6 +85,17 @@ Module.register("MMM-LocalPhoto", {
 		this.mediaMode = this.normalizeMode();
 		this.renderer = this.resolveRenderer();
 		this.edgeFade = this.resolveEdgeFade();
+		this.videoPlayer = this.resolveVideoPlayer();
+		// the native player reports the end of a video with this event
+		window.addEventListener("localphoto-native-video-ended", (e) => {
+			const { token, ok } = e.detail || {};
+			if (token !== this.playToken) return;
+			if (ok) this.next();
+			else {
+				Log.error(`${this.name}: native player could not play ${this.current?.key}`);
+				this.advanceAfter(1000, token);
+			}
+		});
 		this.fadeDims = null; // size of the item shown, for the edge fade
 		this.bitmap = null; // last photo drawn in canvas mode (for redraw on resize)
 		let t = null;
@@ -108,6 +125,15 @@ Module.register("MMM-LocalPhoto", {
 		if (r === "css" || r === "canvas") return r;
 		Log.warn(`${this.name}: unknown photoRenderer "${r}" (use "css" or "canvas"); using css`);
 		return "css";
+	},
+
+	/** "browser" or "native": ?videoPlayer= in this page's URL, else the config. */
+	resolveVideoPlayer () {
+		const fromUrl = new URLSearchParams(location.search).get("videoPlayer");
+		const p = (fromUrl || this.config.videoPlayer || "browser").toLowerCase();
+		if (p === "browser" || p === "native") return p;
+		Log.warn(`${this.name}: unknown videoPlayer "${p}" (use "browser" or "native"); using browser`);
+		return "browser";
 	},
 
 	/** Edge fade width: ?edgeFade= in this page's URL, else the config. { pct } or { px }, or null (off). */
@@ -317,6 +343,11 @@ Module.register("MMM-LocalPhoto", {
 		const video = w.querySelector(".video-current");
 		const v = this.config.video;
 
+		if (this.videoPlayer === "native" && typeof window.localPhotoNativeVideo === "function") {
+			this.playNative(item, token);
+			return;
+		}
+
 		// Fallback in case the video never loads or reports no duration.
 		this.advanceAfter(this.config.displayDurationSeconds * 1000, token);
 
@@ -331,6 +362,28 @@ Module.register("MMM-LocalPhoto", {
 		} else {
 			this.loadVideo(item, token);
 		}
+	},
+
+	/**
+	 * Hand the video to the device's player, which shows it on top of the page.
+	 * The current photo stays underneath; the player's end event calls next().
+	 */
+	playNative (item, token) {
+		const video = this.wrapper.querySelector(".video-current");
+		if (video.getAttribute("src")) {
+			video.pause();
+			video.removeAttribute("src");
+			video.load(); // release the browser's decoder for the player
+			video.style.display = "none";
+		}
+		const maxSeconds = Math.max(5, Number(this.config.video.maxDurationSeconds) || 300);
+		// the player stops itself at maxSeconds; this only covers a lost end event
+		this.advanceAfter((maxSeconds + 15) * 1000, token);
+		window.localPhotoNativeVideo(JSON.stringify({
+			token,
+			url: new URL(this.mediaUrl(item), location.href).href,
+			maxSeconds
+		}));
 	},
 
 	loadVideo (item, token) {
