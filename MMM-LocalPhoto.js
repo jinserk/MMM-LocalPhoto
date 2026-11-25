@@ -47,11 +47,12 @@ Module.register("MMM-LocalPhoto", {
 			switchDelayMs: null
 		},
 		// Who plays videos: "browser" (a <video> element) or "native" (a player on
-		// the display device, e.g. mpv on a Raspberry Pi, called through the
-		// window.localPhotoNativeVideo function its helper adds to the page). A
-		// browser can override it with ?videoPlayer=native in its own URL. Without
-		// the helper, videos play in the browser.
+		// the display device, e.g. mpv on a Raspberry Pi, behind a small web server
+		// at nativePlayerUrl on that device). A browser can override it with
+		// ?videoPlayer=native in its own URL. If the player can't be reached,
+		// videos play in the browser.
 		videoPlayer: "browser",
+		nativePlayerUrl: "http://127.0.0.1:8765",
 		// Date/place of each item (from .mmm-localphoto.json in the media folder,
 		// e.g. written by photo-sync). Lines in this order: "date", "since", "place".
 		showImageInfo: false,
@@ -86,16 +87,6 @@ Module.register("MMM-LocalPhoto", {
 		this.renderer = this.resolveRenderer();
 		this.edgeFade = this.resolveEdgeFade();
 		this.videoPlayer = this.resolveVideoPlayer();
-		// the native player reports the end of a video with this event
-		window.addEventListener("localphoto-native-video-ended", (e) => {
-			const { token, ok } = e.detail || {};
-			if (token !== this.playToken) return;
-			if (ok) this.next();
-			else {
-				Log.error(`${this.name}: native player could not play ${this.current?.key}`);
-				this.advanceAfter(1000, token);
-			}
-		});
 		this.fadeDims = null; // size of the item shown, for the edge fade
 		this.bitmap = null; // last photo drawn in canvas mode (for redraw on resize)
 		let t = null;
@@ -339,14 +330,13 @@ Module.register("MMM-LocalPhoto", {
 
 	showVideo (item) {
 		const token = ++this.playToken;
-		const w = this.wrapper;
-		const video = w.querySelector(".video-current");
-		const v = this.config.video;
+		if (this.videoPlayer === "native") this.playNative(item, token);
+		else this.playInBrowser(item, token);
+	},
 
-		if (this.videoPlayer === "native" && typeof window.localPhotoNativeVideo === "function") {
-			this.playNative(item, token);
-			return;
-		}
+	playInBrowser (item, token) {
+		const video = this.wrapper.querySelector(".video-current");
+		const v = this.config.video;
 
 		// Fallback in case the video never loads or reports no duration.
 		this.advanceAfter(this.config.displayDurationSeconds * 1000, token);
@@ -366,9 +356,10 @@ Module.register("MMM-LocalPhoto", {
 
 	/**
 	 * Hand the video to the device's player, which shows it on top of the page.
-	 * The current photo stays underneath; the player's end event calls next().
+	 * The current photo stays underneath. The player answers the request when
+	 * the video has ended; if it can't be reached, the browser plays the video.
 	 */
-	playNative (item, token) {
+	async playNative (item, token) {
 		const video = this.wrapper.querySelector(".video-current");
 		if (video.getAttribute("src")) {
 			video.pause();
@@ -377,13 +368,25 @@ Module.register("MMM-LocalPhoto", {
 			video.style.display = "none";
 		}
 		const maxSeconds = Math.max(5, Number(this.config.video.maxDurationSeconds) || 300);
-		// the player stops itself at maxSeconds; this only covers a lost end event
+		// the player stops itself at maxSeconds; this only covers a lost answer
 		this.advanceAfter((maxSeconds + 15) * 1000, token);
-		window.localPhotoNativeVideo(JSON.stringify({
-			token,
-			url: new URL(this.mediaUrl(item), location.href).href,
-			maxSeconds
-		}));
+		const query = new URLSearchParams({ url: new URL(this.mediaUrl(item), location.href).href, max: maxSeconds });
+		let result;
+		try {
+			const res = await fetch(`${this.config.nativePlayerUrl.replace(/\/$/, "")}/play?${query}`, { cache: "no-store" });
+			result = await res.json();
+		} catch (e) {
+			if (token !== this.playToken) return;
+			Log.warn(`${this.name}: native player not reachable (${e.message}); playing ${item.key} in the browser`);
+			this.playInBrowser(item, token);
+			return;
+		}
+		if (token !== this.playToken) return;
+		if (result.ok) this.next();
+		else {
+			Log.error(`${this.name}: native player could not play ${item.key}`);
+			this.advanceAfter(1000, token);
+		}
 	},
 
 	loadVideo (item, token) {
